@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Weather Forecast — RT-TAR</title>
+  <link rel="stylesheet" href="styles.css">
+  <script>
+    const weatherCodeMap = {
+      0: 'Clear sky',
+      1: 'Mainly clear',
+      2: 'Partly cloudy',
+      3: 'Overcast',
+      45: 'Fog',
+      48: 'Depositing rime fog',
+      51: 'Light drizzle',
+      53: 'Moderate drizzle',
+      55: 'Dense drizzle',
+      56: 'Light freezing drizzle',
+      57: 'Dense freezing drizzle',
+      61: 'Slight rain',
+      63: 'Moderate rain',
+      65: 'Heavy rain',
+      66: 'Light freezing rain',
+      67: 'Heavy freezing rain',
+      71: 'Slight snow fall',
+      73: 'Moderate snow fall',
+      75: 'Heavy snow fall',
+      77: 'Snow grains',
+      80: 'Slight rain showers',
+      81: 'Moderate rain showers',
+      82: 'Violent rain showers',
+      85: 'Slight snow showers',
+      86: 'Heavy snow showers',
+      95: 'Thunderstorm',
+      96: 'Thunderstorm with slight hail',
+      99: 'Thunderstorm with heavy hail'
+    };
+
+    async function fetchWeather(evt) {
+      evt && evt.preventDefault();
+      const out = document.getElementById('output');
+      out.innerHTML = '';
+      const loading = document.getElementById('loading');
+      loading.style.display = 'block';
+
+      const date = document.getElementById('date').value;
+      const latVal = document.getElementById('lat').value.trim();
+      const lonVal = document.getElementById('lon').value.trim();
+      const city = document.getElementById('city').value.trim();
+
+      let lat = parseFloat(latVal) || null;
+      let lon = parseFloat(lonVal) || null;
+
+      if (!date) {
+        loading.style.display = 'none';
+        out.innerHTML = '<div class="notice">Please pick a date.</div>';
+        return;
+      }
+
+      // Try backend proxy first (assumes you run the backend at localhost:8000)
+      const backendUrl = (location.protocol.startsWith('http') ? (location.origin) : 'http://localhost:8000') + '/v1/weather';
+
+      try {
+        const body = city ? {city, date} : {lat, lon, date};
+        const resp = await fetch(backendUrl, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(body),
+        });
+
+        if (resp.ok) {
+          const data = await resp.json();
+          const wcode = data.weathercode;
+          const wdesc = (wcode !== null && weatherCodeMap[wcode]) ? weatherCodeMap[wcode] : (wcode !== null ? ('Weather code ' + wcode) : 'Unknown');
+          out.innerHTML = `
+            <div class="notice">
+              <strong>Forecast for ${data.date}</strong><br>
+              Location: ${parseFloat(data.latitude).toFixed(4)}, ${parseFloat(data.longitude).toFixed(4)}<br>
+              Condition: ${wdesc}<br>
+              Temperature: ${data.temperature_min}°C — ${data.temperature_max}°C<br>
+              Precipitation (sum): ${data.precipitation_sum} mm
+            </div>
+          `;
+          return;
+        }
+
+        // If backend responds with error, fall back to direct fetch
+        console.warn('Backend fetch failed, falling back to direct Open-Meteo call:', resp.status, await resp.text());
+      } catch (err) {
+        console.warn('Backend unreachable, falling back to direct Open-Meteo call:', err.message);
+      }
+
+      // Fallback: direct Open-Meteo client-side fetch (works if CORS allowed)
+      const useLat = lat || 34.0522;
+      const useLon = lon || -118.2437;
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(useLat)}&longitude=${encodeURIComponent(useLon)}&start_date=${date}&end_date=${date}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode&timezone=auto`;
+
+      try {
+        const resp2 = await fetch(url);
+        if (!resp2.ok) throw new Error('Network error: ' + resp2.status);
+        const data = await resp2.json();
+
+        const dayIndex = 0; // since start=end for a single day
+        const day = data.daily;
+        if (!day || !day.time || day.time.length === 0) {
+          out.innerHTML = '<div class="notice">No data available for that date/location.</div>';
+          return;
+        }
+
+        const dateStr = day.time[dayIndex];
+        const tmax = day.temperature_2m_max[dayIndex];
+        const tmin = day.temperature_2m_min[dayIndex];
+        const precip = day.precipitation_sum[dayIndex];
+        const wcode = day.weathercode ? day.weathercode[dayIndex] : null;
+        const wdesc = (wcode !== null && weatherCodeMap[wcode]) ? weatherCodeMap[wcode] : (wcode !== null ? ('Weather code ' + wcode) : 'Unknown');
+
+        out.innerHTML = `
+          <div class="notice">
+            <strong>Forecast for ${dateStr}</strong><br>
+            Location: ${useLat.toFixed(4)}, ${useLon.toFixed(4)}<br>
+            Condition: ${wdesc}<br>
+            Temperature: ${tmin}°C — ${tmax}°C<br>
+            Precipitation (sum): ${precip} mm
+          </div>
+        `;
+      } catch (err) {
+        out.innerHTML = `<div class="notice">Error fetching weather: ${err.message}</div>`;
+      } finally {
+        loading.style.display = 'none';
+      }
+    }
+
+    // Allow quick load with default date = today
+    window.addEventListener('DOMContentLoaded', () => {
+      const today = new Date().toISOString().slice(0,10);
+      document.getElementById('date').value = today;
+      document.getElementById('fetchBtn').addEventListener('click', fetchWeather);
+      document.getElementById('quickLA').addEventListener('click', (e) => { e.preventDefault(); document.getElementById('lat').value = '34.0522'; document.getElementById('lon').value = '-118.2437'; });
+    });
+  </script>
+</head>
+<body>
+  <main class="container">
+    <h1>Weather Forecast</h1>
+    <p class="muted">Pick a date and optionally coordinates, then fetch the expected weather for that day (uses Open-Meteo).</p>
+
+    <form onsubmit="fetchWeather(event)">
+  <label for="date">Date</label>
+      <input type="date" id="date" required>
+
+  <label for="city">City name (optional)</label>
+  <input id="city" placeholder="Los Angeles">
+
+  <label for="lat">Latitude (optional)</label>
+  <input id="lat" placeholder="34.0522">
+
+  <label for="lon">Longitude (optional)</label>
+  <input id="lon" placeholder="-118.2437">
+
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button id="fetchBtn" class="btn primary" type="button">Get Forecast</button>
+        <a id="quickLA" class="btn" href="#">Use Los Angeles coords</a>
+        <a class="btn" href="index.html">Back</a>
+      </div>
+    </form>
+
+    <div id="loading" style="display:none;margin-top:12px;">Loading…</div>
+    <div id="output" style="margin-top:12px;"></div>
+  </main>
+</body>
+</html>

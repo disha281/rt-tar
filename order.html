@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Place Order — RT-TAR</title>
+    <link rel="stylesheet" href="styles.css">
+    <script>
+        function submitOrder(evt) {
+            evt.preventDefault();
+            const name = document.getElementById('name').value;
+            const item = document.getElementById('item').value;
+            const qty = document.getElementById('qty').value;
+            const addr = document.getElementById('address').value;
+            const out = document.getElementById('output');
+            out.innerHTML = `<strong>Order received</strong><br>Name: ${name}<br>Item: ${item} (x${qty})<br>Address: ${addr}`;
+            out.classList.add('notice');
+
+            // Show embedded map on the right side with the entered address
+            showMapForAddress(addr);
+        }
+
+        function previewInMap() {
+            const addr = document.getElementById('address').value;
+            if (!addr) {
+                const out = document.getElementById('output');
+                out.innerHTML = '<div class="notice">Please enter an address to preview.</div>';
+                return;
+            }
+            showMapForAddress(addr);
+        }
+
+        function showMapForAddress(addr) {
+            const mapPanel = document.getElementById('mapPanel');
+            const frame = document.getElementById('mapFrame');
+            const query = encodeURIComponent(addr);
+            // Use embed-friendly URL (maps search output=embed)
+            const embedUrl = `https://www.google.com/maps?q=${query}&output=embed`;
+            frame.src = embedUrl;
+            mapPanel.style.display = 'block';
+        }
+
+        function closeMap() {
+            const mapPanel = document.getElementById('mapPanel');
+            const frame = document.getElementById('mapFrame');
+            frame.src = '';
+            mapPanel.style.display = 'none';
+        }
+    </script>
+</head>
+<body>
+    <main class="container page-grid">
+        <section>
+        <h1>Place Order</h1>
+        <form onsubmit="submitOrder(event)">
+            <label for="name">Name</label>
+            <input id="name" required>
+
+            <label for="item">Item</label>
+            <select id="item">
+                <option>Basic Package</option>
+                <option>Advanced Package</option>
+                <option>Custom Service</option>
+            </select>
+
+            <label for="qty">Quantity</label>
+            <input id="qty" type="number" min="1" value="1">
+
+            <label for="address">Address</label>
+            <input id="address" placeholder="123 Main St, City" required>
+
+            <div style="margin-top:12px;display:flex;gap:8px;align-items:center;">
+                <button class="btn primary" type="submit">Submit Order</button>
+                <a class="btn" href="index.html">Back</a>
+                <button class="btn" type="button" onclick="previewInMap()">Preview in Map</button>
+            </div>
+        </form>
+
+        <div id="output" style="margin-top:16px;" aria-live="polite"></div>
+        </section>
+
+        <aside id="mapPanel" class="map-panel" style="display:none;">
+            <div class="map-header">
+                <strong>Location preview</strong>
+                <button class="btn" onclick="closeMap()">Close</button>
+            </div>
+            <iframe id="mapFrame" title="map" src="" frameborder="0" style="width:100%;height:100%;border:0;border-radius:8px;"></iframe>
+        </aside>
+    </main>
+</body>
+</html>
